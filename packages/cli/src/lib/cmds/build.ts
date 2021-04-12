@@ -14,16 +14,30 @@
  *  limitations under the License.
  */
 
-import {AndroidSdkTools, Config, DigitalAssetLinks, GradleWrapper, JdkHelper, KeyTool, Log,
+import {AndroidSdkTools, Config, GradleWrapper, JdkHelper, KeyTool, Log,
   ConsoleLog, TwaManifest, JarSigner, SigningKeyInfo, Result} from '@bubblewrap/core';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
 import {enUS as messages} from '../strings';
 import {Prompt, InquirerPrompt} from '../Prompt';
 import {PwaValidator, PwaValidationResult} from '@bubblewrap/validator';
 import {printValidationResult} from '../pwaValidationHelper';
 import {ParsedArgs} from 'minimist';
 import {createValidateString} from '../inputHelpers';
+import {TWA_MANIFEST_FILE_NAME} from '../constants';
+
+// Path to the file generated when building an app bundle file using gradle.
+const APP_BUNDLE_BUILD_OUTPUT_FILE_NAME = './app/build/outputs/bundle/release/app-release.aab';
+const APP_BUNDLE_SIGNED_FILE_NAME = './app-release-bundle.aab'; // Final signed App Bundle file.
+
+// Path to the file generated when building an APK file using gradle.
+const APK_BUILD_OUTPUT_FILE_NAME = './app/build/outputs/apk/release/app-release-unsigned.apk';
+
+// Final aligned and signed APK.
+const APK_SIGNED_FILE_NAME = './app-release-signed.apk';
+
+// Output file for zipalign.
+const APK_ALIGNED_FILE_NAME = './app-release-unsigned-aligned.apk';
 
 interface SigningKeyPasswords {
   keystorePassword: string;
@@ -77,7 +91,7 @@ class Build {
 
   async runValidation(): Promise<Result<PwaValidationResult, Error>> {
     try {
-      const manifestFile = path.join(process.cwd(), 'twa-manifest.json');
+      const manifestFile = this.args.manifest || path.join(process.cwd(), TWA_MANIFEST_FILE_NAME);
       const twaManifest = await TwaManifest.fromFile(manifestFile);
       const pwaValidationResult =
           await PwaValidator.validate(new URL(twaManifest.startUrl, twaManifest.webManifestUrl));
@@ -87,59 +101,32 @@ class Build {
     }
   }
 
-  async generateAssetLinks(
-      twaManifest: TwaManifest, passwords: SigningKeyPasswords): Promise<void> {
-    try {
-      const digitalAssetLinksFile = './assetlinks.json';
-      const keyInfo = await this.keyTool.keyInfo({
-        path: twaManifest.signingKey.path,
-        alias: twaManifest.signingKey.alias,
-        keypassword: passwords.keyPassword,
-        password: passwords.keystorePassword,
-      });
-
-      const sha256Fingerprint = keyInfo.fingerprints.get('SHA256');
-      if (!sha256Fingerprint) {
-        this.prompt.printMessage(messages.messageSha256FingerprintNotFound);
-        return;
-      }
-
-      const digitalAssetLinks =
-        DigitalAssetLinks.generateAssetLinks(twaManifest.packageId, sha256Fingerprint);
-
-      await fs.promises.writeFile(digitalAssetLinksFile, digitalAssetLinks);
-
-      this.prompt.printMessage(messages.messageDigitalAssetLinksSuccess(digitalAssetLinksFile));
-    } catch (e) {
-      this.prompt.printMessage(messages.errorAssetLinksGeneration);
-    }
+  async buildApk(): Promise<void> {
+    await this.gradleWrapper.assembleRelease();
+    await this.androidSdkTools.zipalignOnlyVerification(
+        APK_BUILD_OUTPUT_FILE_NAME, // input file
+    );
+    fs.copyFileSync(APK_BUILD_OUTPUT_FILE_NAME, APK_ALIGNED_FILE_NAME);
   }
 
-  async buildApk(signingKey: SigningKeyInfo, passwords: SigningKeyPasswords): Promise<void> {
-    await this.gradleWrapper.assembleRelease();
-    await this.androidSdkTools.zipalign(
-        './app/build/outputs/apk/release/app-release-unsigned.apk', // input file
-        './app-release-unsigned-aligned.apk', // output file
-    );
-    const outputFile = './app-release-signed.apk';
+  async signApk(signingKey: SigningKeyInfo, passwords: SigningKeyPasswords): Promise<void> {
     await this.androidSdkTools.apksigner(
         signingKey.path,
         passwords.keystorePassword,
         signingKey.alias,
         passwords.keyPassword,
-        './app-release-unsigned-aligned.apk', // input file path
-        outputFile,
+        APK_ALIGNED_FILE_NAME, // input file path
+        APK_SIGNED_FILE_NAME,
     );
-    this.prompt.printMessage(messages.messageApkSucess(outputFile));
   }
 
-  async buildAppBundle(signingKey: SigningKeyInfo, passwords: SigningKeyPasswords): Promise<void> {
+  async buildAppBundle(): Promise<void> {
     await this.gradleWrapper.bundleRelease();
-    const inputFile = 'app/build/outputs/bundle/release/app-release.aab';
-    const outputFile = './app-release-bundle.aab';
-    await this.jarSigner.sign(
-        signingKey, passwords.keystorePassword, passwords.keyPassword, inputFile, outputFile);
-    this.prompt.printMessage(messages.messageAppBundleSuccess(outputFile));
+  }
+
+  async signAppBundle(signingKey: SigningKeyInfo, passwords: SigningKeyPasswords): Promise<void> {
+    await this.jarSigner.sign(signingKey, passwords.keystorePassword, passwords.keyPassword,
+        APP_BUNDLE_BUILD_OUTPUT_FILE_NAME, APP_BUNDLE_SIGNED_FILE_NAME);
   }
 
   async build(): Promise<boolean> {
@@ -153,16 +140,34 @@ class Build {
       validationPromise = this.runValidation();
     }
 
-    const twaManifest = await TwaManifest.fromFile('./twa-manifest.json');
-    const passwords = await this.getPasswords(twaManifest.signingKey);
+    const manifestFile = this.args.manifest || path.join(process.cwd(), TWA_MANIFEST_FILE_NAME);
+    const twaManifest = await TwaManifest.fromFile(manifestFile);
+
+    let passwords = null;
+    if (!this.args.skipSigning) {
+      passwords = await this.getPasswords(twaManifest.signingKey);
+    }
 
     // Builds the Android Studio Project
     this.prompt.printMessage(messages.messageBuildingApp);
-    await this.buildApk(twaManifest.signingKey, passwords);
 
-    await this.buildAppBundle(twaManifest.signingKey, passwords);
+    await this.buildApk();
+    if (passwords) {
+      await this.signApk(twaManifest.signingKey, passwords);
+    }
+    const apkFileName = this.args.skipSigning ?
+      APK_ALIGNED_FILE_NAME :
+      APK_SIGNED_FILE_NAME;
+    this.prompt.printMessage(messages.messageApkSuccess(apkFileName));
 
-    await this.generateAssetLinks(twaManifest, passwords);
+    await this.buildAppBundle();
+    if (passwords) {
+      await this.signAppBundle(twaManifest.signingKey, passwords);
+    }
+    const appBundleFileName = this.args.skipSigning ?
+      APP_BUNDLE_BUILD_OUTPUT_FILE_NAME :
+      APP_BUNDLE_SIGNED_FILE_NAME;
+    this.prompt.printMessage(messages.messageAppBundleSuccess(appBundleFileName));
 
     if (validationPromise !== null) {
       const result = await validationPromise;

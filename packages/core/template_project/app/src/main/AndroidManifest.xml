@@ -65,6 +65,7 @@
 
         <activity android:name="LauncherActivity"
             android:screenOrientation="<%= toAndroidScreenOrientation(orientation) %>"
+            android:alwaysRetainTaskState="true"
             android:label="@string/launcherName">
             <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL"
                 android:value="@string/launchUrl" />
@@ -115,20 +116,22 @@
             <% if (display === 'fullscreen') { %>
             <meta-data android:name="android.support.customtabs.trusted.DISPLAY_MODE"
                 android:value="immersive" />
+            <% } else if (display === 'fullscreen-sticky') { %>
+            <meta-data android:name="android.support.customtabs.trusted.DISPLAY_MODE"
+                android:value="sticky-immersive" />
             <% } %>
 
             <meta-data android:name="android.support.customtabs.trusted.SCREEN_ORIENTATION"
                 android:value="@string/orientation"/>
 
-            <% if (shareTarget) { %>
+            <% if (shareTargetIntentFilter) { %>
                 <intent-filter>
-                    <action android:name="android.intent.action.SEND" />
-                    <action android:name="android.intent.action.SEND_MULTIPLE" />
+                    <% for (const action of shareTargetIntentFilter.actions) { %>
+                        <action android:name="<%= action %>" />
+                    <% } %>
                     <category android:name="android.intent.category.DEFAULT" />
-                    <% for (const file of shareTarget.params.files) { %>
-                        <% for (const accept of file.accept) { %>
-                            <data android:mimeType="<%= accept %>" />
-                        <% } %>
+                    <% for (const mimeType of shareTargetIntentFilter.mimeTypes) { %>
+                        <data android:mimeType="<%= mimeType %>" />
                     <% } %>
                 </intent-filter>
             <% } %>

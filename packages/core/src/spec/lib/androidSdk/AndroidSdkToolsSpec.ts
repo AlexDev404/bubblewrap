@@ -16,7 +16,7 @@
 
 import {Config} from '../../../lib/Config';
 import {JdkHelper} from '../../../lib/jdk/JdkHelper';
-import {AndroidSdkTools} from '../../../lib/androidSdk/AndroidSdkTools';
+import {AndroidSdkTools, BUILD_TOOLS_VERSION} from '../../../lib/androidSdk/AndroidSdkTools';
 import util = require('../../../lib/util');
 import * as fs from 'fs';
 import {MockLog} from '../../../lib/mock/MockLog';
@@ -72,13 +72,13 @@ function buildMockProcess(platform: string): NodeJS.Process {
 
 describe('AndroidSdkTools', () => {
   describe('#constructor', () => {
-    it('Throws Error when the path to AndroidSdkHome doesn\'t exist', () => {
+    it('Throws Error when the path to AndroidSdkHome doesn\'t exist', async () => {
       spyOn(fs, 'existsSync').and.returnValue(false);
       const config = buildMockConfig('linux');
       const process = buildMockProcess('linux');
       const jdkHelper = new JdkHelper(process, config);
       const mockLog = new MockLog();
-      expectAsync(AndroidSdkTools.create(process, config, jdkHelper, mockLog))
+      await expectAsync(AndroidSdkTools.create(process, config, jdkHelper, mockLog))
           .toBeRejectedWithError();
     });
   });
@@ -129,7 +129,9 @@ describe('AndroidSdkTools', () => {
         await androidSdkTools.installBuildTools();
         expect(util.execInteractive).toHaveBeenCalledWith(
             test.expectedCwd,
-            ['--install', '"build-tools;29.0.2"', `--sdk_root=${test.expectedSdkRoot}`],
+            ['--install',
+              `"build-tools;${BUILD_TOOLS_VERSION}"`,
+              `--sdk_root=${test.expectedSdkRoot}`],
             androidSdkTools.getEnv());
       });
     });
@@ -147,7 +149,7 @@ describe('AndroidSdkTools', () => {
 
       // Set existsSync to return false so check for sdkmanager fails.
       fsSpy.and.returnValue(false);
-      expectAsync(androidSdkTools.installBuildTools()).toBeRejectedWithError();
+      await expectAsync(androidSdkTools.installBuildTools()).toBeRejectedWithError();
     });
   });
 
@@ -201,14 +203,15 @@ describe('AndroidSdkTools', () => {
       const mockLog = new MockLog();
       const androidSdkTools = await AndroidSdkTools.create(process, config, jdkHelper, mockLog);
       fsSpy.and.returnValue(false);
-      expectAsync(androidSdkTools.install('./app-release-signed.apk')).toBeRejectedWithError();
+      await expectAsync(androidSdkTools.install('./app-release-signed.apk'))
+          .toBeRejectedWithError();
     });
   });
 
   describe('#apksigner', () => {
     const tests = [
       {platform: 'linux',
-        expectedCmd: '/home/user/android-sdk/build-tools/29.0.2/apksigner',
+        expectedCmd: `/home/user/android-sdk/build-tools/${BUILD_TOOLS_VERSION}/apksigner`,
         expectedArgs: [
           'sign', '--ks', '/path/to/keystore.ks',
           '--ks-key-alias', 'alias',
@@ -218,7 +221,7 @@ describe('AndroidSdkTools', () => {
           'unsigned.apk',
         ]},
       {platform: 'darwin',
-        expectedCmd: '/home/user/android-sdk/build-tools/29.0.2/apksigner',
+        expectedCmd: `/home/user/android-sdk/build-tools/${BUILD_TOOLS_VERSION}/apksigner`,
         expectedArgs: [
           'sign', '--ks', '/path/to/keystore.ks',
           '--ks-key-alias', 'alias',
@@ -233,7 +236,7 @@ describe('AndroidSdkTools', () => {
           '-Xmx1024M',
           '-Xss1m',
           '-jar',
-          'C:\\Users\\user\\android-sdk\\build-tools\\29.0.2\\lib\\apksigner.jar',
+          `C:\\Users\\user\\android-sdk\\build-tools\\${BUILD_TOOLS_VERSION}\\lib\\apksigner.jar`,
           'sign', '--ks', '/path/to/keystore.ks',
           '--ks-key-alias', 'alias',
           '--ks-pass', 'pass:kspass',

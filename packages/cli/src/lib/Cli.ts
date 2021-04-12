@@ -28,6 +28,7 @@ import {BUBBLEWRAP_LOGO} from './constants';
 import {updateConfig} from './cmds/updateConfig';
 import {doctor} from './cmds/doctor';
 import {merge} from './cmds/merge';
+import {fingerprint} from './cmds/fingerprint';
 
 export class Cli {
   async run(args: string[]): Promise<boolean> {
@@ -36,9 +37,9 @@ export class Cli {
       throw new Error(`Current Node.js version is ${process.versions.node}.` +
           ' Node.js version 10 or above is required to run bubblewrap.');
     }
-    const config = await loadOrCreateConfig();
-
     const parsedArgs = minimist(args);
+
+    const config = await loadOrCreateConfig(undefined, undefined, parsedArgs.config);
 
     let command;
     if (parsedArgs._.length === 0) {
@@ -79,6 +80,8 @@ export class Cli {
         return await doctor();
       case 'merge':
         return await merge(parsedArgs);
+      case 'fingerprint':
+        return await fingerprint(parsedArgs);
       default:
         throw new Error(
             `"${command}" is not a valid command! Use 'bubblewrap help' for a list of commands`);

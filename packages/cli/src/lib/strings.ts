@@ -14,40 +14,49 @@
  *  limitations under the License.
  */
 
+import {Fingerprint} from '@bubblewrap/core';
 import {cyan, green, underline, bold, italic, red, yellow} from 'colors';
 
 type Messages = {
   errorAssetLinksGeneration: string;
+  errorCouldNotfindTwaManifest: (file: string) => string;
   errorDirectoryDoesNotExist: (directory: string) => string;
   errorFailedToRunQualityCriteria: string;
   errorMaxLength: (maxLength: number, actualLength: number) => string;
   errorMinLength: (minLength: number, actualLength: number) => string;
   errorMissingManifestParameter: string;
+  errorMissingArgument: (expected: number, received: number) => string;
   errorRequireHttps: string;
   errorInvalidUrl: (url: string) => string;
   errorInvalidColor: (color: string) => string;
   errorInvalidDisplayMode: (displayMode: string) => string;
   errorInvalidOrientation: (orientation: string) => string;
   errorInvalidInteger: (integer: string) => string;
+  errorInvalidSha256Fingerprint: (fingerprint: string) => string;
   errorUrlMustBeImage: (mimeType: string) => string;
   errorUrlMustNotBeSvg: string;
   errorSdkTerms: string;
   messageInitializingWebManifest: (manifestUrl: string) => string;
+  messageAddedFingerprint: (fingerpring: Fingerprint) => string;
   messageAndroidAppDetails: string;
   messageAndroidAppDetailsDesc: string;
-  messageApkSucess: (filename: string) => string;
+  messageApkSuccess: (filename: string) => string;
   messageAppBundleSuccess: (filename: string) => string;
   messageBuildingApp: string;
   messageDigitalAssetLinksSuccess: (filename: string) => string;
   messageEnterPasswords: (keypath: string, keyalias: string) => string;
+  messageGeneratedAssetLinksFile: (outputfile: string) => string;
   messageGeneratedNewVersion: (appVersionName: string, appVersionCode: number) => string;
   messageGeneratingAndroidProject: string;
   messageInstallingBuildTools: string;
   messageLauncherIconAndSplash: string;
   messageLauncherIconAndSplashDesc: string;
+  messageLoadingTwaManifestFrom: (path: string) => string;
   messageOptionFeatures: string;
   messageOptionalFeaturesDesc: string;
   messageProjectGeneratedSuccess: string;
+  messageRemovedFingerprint: (fingerpring: Fingerprint) => string;
+  messageSavingTwaManifestTo: (path: string) => string;
   messageSha256FingerprintNotFound: string;
   messageSigningKeyCreation: string;
   messageSigningKeyInformation: string;
@@ -82,6 +91,7 @@ type Messages = {
   promptMaskableIconUrl: string;
   promptMonochromeIconUrl: string;
   promptShortcuts: string;
+  promptPlayBilling: string;
   promptPackageId: string;
   promptKeyPath: string;
   promptKeyAlias: string;
@@ -104,6 +114,9 @@ type Messages = {
 
 export const enUS: Messages = {
   errorAssetLinksGeneration: 'Error generating "assetlinks.json"',
+  errorCouldNotfindTwaManifest: (file: string): string => {
+    return `Could not load a manifest from: ${cyan(file)}.`;
+  },
   errorDirectoryDoesNotExist: (directory: string): string => {
     return `Cannot write to directory: ${directory}.`;
   },
@@ -114,6 +127,10 @@ export const enUS: Messages = {
   },
   errorMinLength: (minLength, actualLength): string => {
     return `Minimum length is ${minLength} but input is ${actualLength}.`;
+  },
+  errorMissingArgument: (expected: number, received: number): string => {
+    return `Expected ${cyan(expected.toString())} arguments \
+but received ${cyan(received.toString())}. Run ${cyan('bubblewrap help')} for usage.`;
   },
   errorMissingManifestParameter: `Missing required parameter ${cyan('--manifest')}`,
   errorRequireHttps: 'Url must be https.',
@@ -132,11 +149,17 @@ export const enUS: Messages = {
   errorInvalidInteger: (integer: string): string => {
     return `Invalid integer provided: ${integer}`;
   },
+  errorInvalidSha256Fingerprint: (fingerprint: string): string => {
+    return `Invalid SHA-256 fingerprint ${red(fingerprint)}.`;
+  },
   errorUrlMustBeImage: (mimeType: string): string => {
     return `URL must resolve to an image/* mime-type, but resolved to ${mimeType}.`;
   },
   errorUrlMustNotBeSvg: 'SVG images are not supported yet.',
   errorSdkTerms: 'Downloading Android SDK failed because Terms and Conditions was not signed.',
+  messageAddedFingerprint: (fingerprint: Fingerprint): string => {
+    return `Added fingerprint with value ${fingerprint.value}.`;
+  },
   messageAndroidAppDetails: underline(`\nAndroid app details ${green('(2/5)')}`),
   messageAndroidAppDetailsDesc: `
 Please, enter details regarding how the Android app will look when installed
@@ -164,7 +187,7 @@ into a device:
 
 \t- ${bold('Status bar color:')} sets the status bar color used when the
 \t  application is in foreground. Example: ${cyan('#7CC0FF')}\n`,
-  messageApkSucess: (filename: string): string => {
+  messageApkSuccess: (filename: string): string => {
     return `\t- Generated Android APK at ${cyan(filename)}`;
   },
   messageAppBundleSuccess: (filename: string): string => {
@@ -180,6 +203,9 @@ into a device:
   messageEnterPasswords: (keypath: string, keyalias: string): string => {
     return `Please, enter passwords for the keystore ${cyan(keypath)} and alias \
 ${cyan(keyalias)}.\n`;
+  },
+  messageGeneratedAssetLinksFile: (outputfile: string): string => {
+    return `\nGenerated Digital Asset Links file at ${cyan(outputfile)}.`;
   },
   messageGeneratedNewVersion: (appVersionName: string, appVersionCode: number): string => {
     return `Generated new version with versionName: ${appVersionName} and ` +
@@ -209,6 +235,9 @@ a blank white page to users.
   messageInitializingWebManifest: (manifestUrl: string): string => {
     return `Initializing application from Web Manifest:\n\t-  ${cyan(manifestUrl)}`;
   },
+  messageLoadingTwaManifestFrom: (path: string): string => {
+    return `Loading TWA Manifest from: ${cyan(path)}`;
+  },
   messageOptionFeatures: underline(`\nOptional Features ${green('(4/5)')}`),
   messageOptionalFeaturesDesc: `
 \t- ${bold('Include app shortcuts:')} This question is only prompted if a
@@ -223,6 +252,12 @@ a blank white page to users.
 \t  ${italic('theme_color')}. They will be used for notification icons.\n`,
   messageProjectGeneratedSuccess: '\nProject generated successfully. Build it by running ' +
       cyan('bubblewrap build'),
+  messageRemovedFingerprint: (fingerprint: Fingerprint): string => {
+    return `Removed fingerprint with value ${fingerprint.value}.`;
+  },
+  messageSavingTwaManifestTo: (path: string): string => {
+    return `Saving TWA Manifest to: ${cyan(path)}`;
+  },
   messageSha256FingerprintNotFound: 'Could not find SHA256 fingerprint. Skipping generating ' +
       '"assetlinks.json"',
   messageSigningKeyCreation: underline('\nSigning key creation'),
@@ -289,6 +324,7 @@ the PWA:
   promptMaskableIconUrl: 'Maskable icon URL:',
   promptMonochromeIconUrl: 'Monochrome icon URL:',
   promptShortcuts: 'Include app shortcuts?',
+  promptPlayBilling: 'Include support for Play Billing (this relies on alpha dependencies)?',
   promptPackageId: 'Application ID:',
   promptKeyPath: 'Key store location:',
   promptKeyAlias: 'Key name:',

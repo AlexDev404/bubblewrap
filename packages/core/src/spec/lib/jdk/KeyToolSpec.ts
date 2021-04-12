@@ -117,6 +117,7 @@ describe('KeyTool', () => {
       await keyTool.list(keyOptions);
       expect(util.execute).toHaveBeenCalledWith([
         'keytool',
+        '-J-Duser.language=en',
         '-list',
         '-v',
         '-keystore "/"',
@@ -129,7 +130,7 @@ describe('KeyTool', () => {
     it('Throws error if keyOptions.path doesn\'t exist', async () => {
       const keyTool = new KeyTool(jdkHelper, new MockLog());
       spyOn(fs, 'existsSync').and.returnValue(false);
-      expectAsync(keyTool.list(keyOptions)).toBeRejectedWithError();
+      await expectAsync(keyTool.list(keyOptions)).toBeRejectedWithError();
     });
   });
 

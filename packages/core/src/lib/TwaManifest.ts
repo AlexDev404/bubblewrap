@@ -38,7 +38,7 @@ const SHORT_NAME_MAX_SIZE = 12;
 const MIN_NOTIFICATION_ICON_SIZE = 48;
 
 // Supported display modes for TWA
-const DISPLAY_MODE_VALUES = ['standalone', 'fullscreen'];
+const DISPLAY_MODE_VALUES = ['standalone', 'fullscreen', 'fullscreen-sticky'];
 export type DisplayMode = typeof DISPLAY_MODE_VALUES[number];
 export const DisplayModes: DisplayMode[] = [...DISPLAY_MODE_VALUES];
 
@@ -72,7 +72,7 @@ const DEFAULT_APP_VERSION_CODE = 1;
 const DEFAULT_APP_VERSION_NAME = DEFAULT_APP_VERSION_CODE.toString();
 const DEFAULT_SIGNING_KEY_PATH = './android.keystore';
 const DEFAULT_SIGNING_KEY_ALIAS = 'android';
-const DEFAULT_ENABLE_NOTIFICATIONS = false;
+const DEFAULT_ENABLE_NOTIFICATIONS = true;
 const DEFAULT_GENERATOR_APP_NAME = 'unknown';
 const DEFAULT_ORIENTATION = 'default';
 
@@ -120,6 +120,8 @@ type alphaDependencies = {
  * splashScreenFadeOutDuration: 300
  * isChromeOSOnly: false, // Setting to true will enable a feature that prevents non-ChromeOS devices
  *  from installing the app.
+ * serviceAccountJsonFile: '<%= serviceAccountJsonFile %>', // The service account used to communicate with
+ *  Google Play.
  *
  */
 export class TwaManifest {
@@ -153,6 +155,8 @@ export class TwaManifest {
   isChromeOSOnly: boolean;
   shareTarget?: ShareTarget;
   orientation: Orientation;
+  fingerprints: Fingerprint[];
+  serviceAccountJsonFile: string | undefined;
 
   private static log = new ConsoleLog('twa-manifest');
 
@@ -195,6 +199,8 @@ export class TwaManifest {
     this.isChromeOSOnly = data.isChromeOSOnly != undefined ? data.isChromeOSOnly : false;
     this.shareTarget = data.shareTarget;
     this.orientation = data.orientation || DEFAULT_ORIENTATION;
+    this.fingerprints = data.fingerprints || [];
+    this.serviceAccountJsonFile = data.serviceAccountJsonFile;
   }
 
   /**
@@ -221,7 +227,6 @@ export class TwaManifest {
    * @param {String} filename the location where the TWA Manifest will be saved.
    */
   async saveToFile(filename: string): Promise<void> {
-    console.log('Saving Config to: ' + filename);
     const json: TwaManifestJson = this.toJson();
     await fs.promises.writeFile(filename, JSON.stringify(json, null, 2));
   }
@@ -321,13 +326,15 @@ export class TwaManifest {
 
   private static verifyShareTarget(
       webManifestUrl: URL, shareTarget?: ShareTarget): ShareTarget | undefined {
-    if (!shareTarget?.action || !shareTarget?.params?.files) {
+    if (!shareTarget?.action) {
       return undefined;
     }
 
-    for (const file of shareTarget.params.files) {
-      if (!file.accept) {
-        return undefined;
+    if (shareTarget?.params?.files) {
+      for (const file of shareTarget.params.files) {
+        if (!file.accept) {
+          return undefined;
+        }
       }
     }
 
@@ -516,9 +523,16 @@ export interface TwaManifestJson {
   isChromeOSOnly?: boolean;
   shareTarget?: ShareTarget;
   orientation?: Orientation;
+  fingerprints?: Fingerprint[];
+  serviceAccountJsonFile?: string;
 }
 
 export interface SigningKeyInfo {
   path: string;
   alias: string;
+}
+
+export type Fingerprint = {
+  name?: string;
+  value: string;
 }
